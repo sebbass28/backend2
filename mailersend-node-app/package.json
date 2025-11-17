@@ -1,0 +1,26 @@
+{
+  "name": "mailersend-node-app",
+  "version": "1.0.0",
+  "description": "A Node.js application for sending emails using MailerSend API.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "jest"
+  },
+  "keywords": [
+    "mailer",
+    "email",
+    "mailerSend",
+    "nodejs"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^0.21.1",
+    "dotenv": "^10.0.0",
+    "express": "^4.17.1"
+  },
+  "devDependencies": {
+    "jest": "^27.0.6"
+  }
+}
