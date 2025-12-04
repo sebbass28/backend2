@@ -1,7 +1,10 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
-import { register, login, refreshToken, logout, forgotPassword, resetPassword } from '../controllers/authController.js';
+import { register, login, refreshToken, logout, forgotPassword, resetPassword, getProfile } from '../controllers/authController.js';
+import { authenticateJWT } from '../middleware/auth.js';
 const router = express.Router();
+
+router.get('/me', authenticateJWT, getProfile);
 
 router.post('/register',
   body('email').isEmail(),
