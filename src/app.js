@@ -25,29 +25,9 @@ const app = express();
 
 // Middleware
 app.use(helmet());
+// Simple CORS - allow all origins temporarily to fix the issue
 app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, Postman, etc.)
-    if (!origin) return callback(null, true);
-
-    // Allow configured frontend URL
-    if (process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL) {
-      return callback(null, true);
-    }
-
-    // Allow all Vercel preview and production URLs
-    if (origin.includes('vercel.app')) {
-      return callback(null, true);
-    }
-
-    // Allow localhost for development
-    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-      return callback(null, true);
-    }
-
-    // Allow all other origins in development, block in production
-    callback(null, true);
-  },
+  origin: true,
   credentials: true
 }));
 app.use(express.json({ limit: '5mb' }));
