@@ -15,22 +15,31 @@ const REFRESH_EXPIRES = process.env.REFRESH_TOKEN_EXPIRES_IN || '30d';
 export async function register(req, res) {
   const { email, password, name } = req.body;
   try {
+    console.log('[REGISTER] Starting registration for email:', email);
+    console.log('[REGISTER] JWT_SECRET exists:', !!JWT_SECRET);
+    console.log('[REGISTER] REFRESH_SECRET exists:', !!REFRESH_SECRET);
+
     const saltRounds = 10;
     const hash = await bcrypt.hash(password, saltRounds);
     const q = `INSERT INTO users (email, password_hash, name) VALUES ($1,$2,$3) RETURNING id,email,name,created_at`;
     const { rows } = await query(q, [email, hash, name || null]);
 
     const user = rows[0];
+    console.log('[REGISTER] User created with ID:', user.id);
+
     const token = jwt.sign({ id: user.id, email: user.email, role: 'user' }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
     const refreshToken = jwt.sign({ id: user.id }, REFRESH_SECRET, { expiresIn: REFRESH_EXPIRES });
 
     const expiresAt = new Date(Date.now() + msToMs(REFRESH_EXPIRES));
     await query('INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1,$2,$3)', [user.id, refreshToken, expiresAt]);
 
+    console.log('[REGISTER] Registration successful for user:', user.id);
     res.json({ user, token, refreshToken });
   } catch (err) {
     if (err.code === '23505') return res.status(400).json({ error: 'Email already registered' });
-    console.error(err);
+    console.error('[REGISTER ERROR]', err);
+    console.error('[REGISTER ERROR] Message:', err.message);
+    console.error('[REGISTER ERROR] Stack:', err.stack);
     res.status(500).json({ error: 'Server error' });
   }
 }
@@ -38,12 +47,20 @@ export async function register(req, res) {
 export async function login(req, res) {
   const { email, password } = req.body;
   try {
+    console.log('[LOGIN] Starting login for email:', email);
+    console.log('[LOGIN] JWT_SECRET exists:', !!JWT_SECRET);
+    console.log('[LOGIN] REFRESH_SECRET exists:', !!REFRESH_SECRET);
+
     const q = 'SELECT id,email,password_hash,name,role FROM users WHERE email=$1';
     const { rows } = await query(q, [email]);
+    console.log('[LOGIN] User query completed, found:', rows.length, 'users');
+
     if (!rows.length) return res.status(401).json({ error: 'Invalid credentials' });
 
     const user = rows[0];
     const match = await bcrypt.compare(password, user.password_hash);
+    console.log('[LOGIN] Password match:', match);
+
     if (!match) return res.status(401).json({ error: 'Invalid credentials' });
 
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
@@ -52,9 +69,12 @@ export async function login(req, res) {
     const expiresAt = new Date(Date.now() + msToMs(REFRESH_EXPIRES));
     await query('INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1,$2,$3)', [user.id, refreshToken, expiresAt]);
 
+    console.log('[LOGIN] Login successful for user:', user.id);
     res.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role }, token, refreshToken });
   } catch (err) {
-    console.error(err);
+    console.error('[LOGIN ERROR]', err);
+    console.error('[LOGIN ERROR] Message:', err.message);
+    console.error('[LOGIN ERROR] Stack:', err.stack);
     res.status(500).json({ error: 'Server error' });
   }
 }
