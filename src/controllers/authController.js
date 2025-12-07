@@ -230,7 +230,8 @@ export async function forgotPassword(req, res) {
 
     const recipients = [new Recipient(email, user.name || 'Usuario')];
 
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+    const baseUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+    const resetUrl = `${baseUrl}/reset-password/${resetToken}`;
 
     const emailParams = new EmailParams()
       .setFrom(sentFrom)
