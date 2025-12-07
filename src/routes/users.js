@@ -1,6 +1,6 @@
 import express from 'express';
 import { authenticateJWT } from '../middleware/auth.js';
-import { getUserById, updateUser, updateAvatar } from '../controllers/userController.js';
+import { getUserById, updateUser, updateAvatar, deleteUser } from '../controllers/userController.js';
 import { body, validationResult } from 'express-validator';
 import multer from 'multer';
 import path from 'path';
@@ -81,5 +81,8 @@ router.put('/:id',
     return updateUser(req, res);
   }
 );
+
+// Delete user account
+router.delete('/me', deleteUser);
 
 export default router;
