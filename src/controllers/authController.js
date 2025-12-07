@@ -116,6 +116,36 @@ export async function getProfile(req, res) {
   }
 }
 
+export async function changePassword(req, res) {
+  const { currentPassword, newPassword } = req.body;
+  const userId = req.user.id;
+
+  try {
+    // 1. Obtener el usuario con su hash de contraseña actual
+    const { rows } = await query('SELECT password_hash FROM users WHERE id = $1', [userId]);
+    if (!rows.length) return res.status(404).json({ error: 'User not found' });
+    
+    const user = rows[0];
+
+    // 2. Verificar que la contraseña actual sea correcta
+    const match = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!match) return res.status(400).json({ error: 'La contraseña actual es incorrecta' });
+
+    // 3. Hashear la nueva contraseña
+    const saltRounds = 10;
+    const newHash = await bcrypt.hash(newPassword, saltRounds);
+
+    // 4. Actualizar en la base de datos
+    await query('UPDATE users SET password_hash = $1 WHERE id = $2', [newHash, userId]);
+
+    console.log('[AUTH] Password changed for user:', userId);
+    res.json({ message: 'Contraseña actualizada correctamente' });
+  } catch (err) {
+    console.error('[CHANGE PASSWORD ERROR]', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+}
+
 export async function refreshToken(req, res) {
   const { refreshToken } = req.body;
   if (!refreshToken) return res.status(400).json({ error: 'No refresh token' });
