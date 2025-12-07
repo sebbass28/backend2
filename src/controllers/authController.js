@@ -310,18 +310,3 @@ export async function resetPassword(req, res) {
   }
 }
 
-export async function getProfile(req, res) {
-  try {
-    const q = 'SELECT id, email, name, role, avatar_url, phone, country, address, currency, monthly_income, birth_date, created_at FROM users WHERE id = $1';
-    const { rows } = await query(q, [req.user.id]);
-    
-    if (!rows.length) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    
-    res.json(rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Server error' });
-  }
-}
