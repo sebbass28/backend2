@@ -8,6 +8,13 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   name TEXT,
   role TEXT DEFAULT 'user', -- user | admin
+  avatar_url TEXT,
+  phone TEXT,
+  country TEXT,
+  address TEXT,
+  currency TEXT DEFAULT 'USD',
+  monthly_income NUMERIC,
+  birth_date DATE,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
