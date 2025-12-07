@@ -5,7 +5,7 @@ import { body, validationResult } from 'express-validator';
 export async function getUserById(req, res) {
   const userId = req.user.id;
   try {
-    const q = 'SELECT id, email, name, role, avatar_url, created_at FROM users WHERE id=$1';
+    const q = 'SELECT id, email, name, role, avatar_url, phone, country, address, currency, monthly_income, birth_date, created_at FROM users WHERE id=$1';
     const { rows } = await query(q, [userId]);
     if (!rows.length) return res.status(404).json({ error: 'User not found' });
     res.json({ user: rows[0] });
@@ -17,10 +17,20 @@ export async function getUserById(req, res) {
 
 export async function updateUser(req, res) {
   const userId = req.user.id;
-  const { name, email } = req.body;
+  const { name, email, phone, country, address, currency, monthly_income, birth_date } = req.body;
   try {
-    const q = 'UPDATE users SET name=$1, email=$2 WHERE id=$3 RETURNING id, email, name, role, created_at';
-    const { rows } = await query(q, [name, email, userId]);
+    const q = `UPDATE users SET 
+      name = COALESCE($1, name), 
+      email = COALESCE($2, email),
+      phone = COALESCE($3, phone),
+      country = COALESCE($4, country),
+      address = COALESCE($5, address),
+      currency = COALESCE($6, currency),
+      monthly_income = COALESCE($7, monthly_income),
+      birth_date = COALESCE($8, birth_date)
+      WHERE id=$9 
+      RETURNING id, email, name, role, avatar_url, phone, country, address, currency, monthly_income, birth_date, created_at`;
+    const { rows } = await query(q, [name, email, phone, country, address, currency, monthly_income, birth_date, userId]);
     if (!rows.length) return res.status(404).json({ error: 'User not found' });
     res.json({ user: rows[0] });
   } catch (err) {

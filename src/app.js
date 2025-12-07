@@ -24,7 +24,9 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 // Simple CORS - allow all origins temporarily to fix the issue
 app.use(cors({
   origin: true,
