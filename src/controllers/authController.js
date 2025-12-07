@@ -13,7 +13,7 @@ const REFRESH_SECRET = process.env.REFRESH_TOKEN_SECRET;
 const REFRESH_EXPIRES = process.env.REFRESH_TOKEN_EXPIRES_IN || '30d';
 
 export async function register(req, res) {
-  const { email, password, name } = req.body;
+  const { email, password, name, phone, country, address, preferCoin, mensualIngres, birthDay } = req.body;
   try {
     console.log('[REGISTER] Starting registration for email:', email);
     console.log('[REGISTER] JWT_SECRET exists:', !!JWT_SECRET);
@@ -21,8 +21,27 @@ export async function register(req, res) {
 
     const saltRounds = 10;
     const hash = await bcrypt.hash(password, saltRounds);
-    const q = `INSERT INTO users (email, password_hash, name) VALUES ($1,$2,$3) RETURNING id,email,name,created_at`;
-    const { rows } = await query(q, [email, hash, name || null]);
+    
+    // Mapeo de campos del frontend a la base de datos
+    // preferCoin -> currency
+    // mensualIngres -> monthly_income
+    // birthDay -> birth_date
+    
+    const q = `INSERT INTO users (email, password_hash, name, phone, country, address, currency, monthly_income, birth_date) 
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+               RETURNING id, email, name, role, created_at`;
+               
+    const { rows } = await query(q, [
+      email, 
+      hash, 
+      name || null,
+      phone || null,
+      country || null,
+      address || null,
+      preferCoin || 'USD',
+      mensualIngres || null,
+      birthDay || null
+    ]);
 
     const user = rows[0];
     console.log('[REGISTER] User created with ID:', user.id);
