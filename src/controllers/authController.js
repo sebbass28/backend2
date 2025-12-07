@@ -13,23 +13,24 @@ const REFRESH_SECRET = process.env.REFRESH_TOKEN_SECRET;
 const REFRESH_EXPIRES = process.env.REFRESH_TOKEN_EXPIRES_IN || '30d';
 
 export async function register(req, res) {
-  const { email, password, name, phone, country, address, preferCoin, mensualIngres, birthDay } = req.body;
+  // Map frontend keys (numberPhone, location) to backend keys (phone, country)
+  const { email, password, name, numberPhone, location, address, preferCoin, mensualIngres, birthDay } = req.body;
+  const phone = numberPhone;
+  const country = location;
+
   try {
     console.log('[REGISTER] Starting registration for email:', email);
-    console.log('[REGISTER] JWT_SECRET exists:', !!JWT_SECRET);
-    console.log('[REGISTER] REFRESH_SECRET exists:', !!REFRESH_SECRET);
-
+    
     const saltRounds = 10;
     const hash = await bcrypt.hash(password, saltRounds);
     
-    // Mapeo de campos del frontend a la base de datos
     // preferCoin -> currency
     // mensualIngres -> monthly_income
     // birthDay -> birth_date
     
     const q = `INSERT INTO users (email, password_hash, name, phone, country, address, currency, monthly_income, birth_date) 
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
-               RETURNING id, email, name, role, created_at`;
+               RETURNING id, email, name, role, created_at, phone, country, address, currency, monthly_income, birth_date, avatar_url`;
                
     const { rows } = await query(q, [
       email, 
@@ -67,13 +68,11 @@ export async function login(req, res) {
   const { email, password } = req.body;
   try {
     console.log('[LOGIN] Starting login for email:', email);
-    console.log('[LOGIN] JWT_SECRET exists:', !!JWT_SECRET);
-    console.log('[LOGIN] REFRESH_SECRET exists:', !!REFRESH_SECRET);
-
-    const q = 'SELECT id,email,password_hash,name,role FROM users WHERE email=$1';
+    
+    // Include all profile fields in login query
+    const q = 'SELECT id, email, password_hash, name, role, avatar_url, phone, country, address, currency, monthly_income, birth_date, created_at FROM users WHERE email=$1';
     const { rows } = await query(q, [email]);
-    console.log('[LOGIN] User query completed, found:', rows.length, 'users');
-
+    
     if (!rows.length) return res.status(401).json({ error: 'Invalid credentials' });
 
     const user = rows[0];
@@ -89,11 +88,30 @@ export async function login(req, res) {
     await query('INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1,$2,$3)', [user.id, refreshToken, expiresAt]);
 
     console.log('[LOGIN] Login successful for user:', user.id);
-    res.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role }, token, refreshToken });
+    // Remove password_hash before sending
+    const { password_hash, ...userWithoutPass } = user;
+    
+    res.json({ user: userWithoutPass, token, refreshToken });
   } catch (err) {
     console.error('[LOGIN ERROR]', err);
     console.error('[LOGIN ERROR] Message:', err.message);
     console.error('[LOGIN ERROR] Stack:', err.stack);
+    res.status(500).json({ error: 'Server error' });
+  }
+}
+
+export async function getProfile(req, res) {
+  try {
+    const q = 'SELECT id, email, name, role, avatar_url, phone, country, address, currency, monthly_income, birth_date, created_at FROM users WHERE id = $1';
+    const { rows } = await query(q, [req.user.id]);
+    
+    if (!rows.length) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Server error' });
   }
 }
@@ -294,7 +312,7 @@ export async function resetPassword(req, res) {
 
 export async function getProfile(req, res) {
   try {
-    const q = 'SELECT id, email, name, role, created_at FROM users WHERE id = $1';
+    const q = 'SELECT id, email, name, role, avatar_url, phone, country, address, currency, monthly_income, birth_date, created_at FROM users WHERE id = $1';
     const { rows } = await query(q, [req.user.id]);
     
     if (!rows.length) {
