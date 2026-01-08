@@ -1,118 +1,151 @@
-import { query } from '../db.js';
-import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
-import dotenv from 'dotenv';
-import { v4 as uuidv4 } from 'uuid';
-import { MailerSend, EmailParams, Sender, Recipient } from 'mailersend';
-import crypto from 'crypto';
+import { query } from "../db.js";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import dotenv from "dotenv";
+import { v4 as uuidv4 } from "uuid";
+import nodemailer from "nodemailer";
+import crypto from "crypto";
 dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET;
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
 const REFRESH_SECRET = process.env.REFRESH_TOKEN_SECRET;
-const REFRESH_EXPIRES = process.env.REFRESH_TOKEN_EXPIRES_IN || '30d';
+const REFRESH_EXPIRES = process.env.REFRESH_TOKEN_EXPIRES_IN || "30d";
 
 export async function register(req, res) {
   // Map frontend keys (numberPhone, location) to backend keys (phone, country)
-  const { email, password, name, numberPhone, location, address, preferCoin, mensualIngres, birthDay } = req.body;
+  const {
+    email,
+    password,
+    name,
+    numberPhone,
+    location,
+    address,
+    preferCoin,
+    mensualIngres,
+    birthDay,
+  } = req.body;
   const phone = numberPhone;
   const country = location;
 
   try {
-    console.log('[REGISTER] Starting registration for email:', email);
-    
+    console.log("[REGISTER] Starting registration for email:", email);
+
     const saltRounds = 10;
     const hash = await bcrypt.hash(password, saltRounds);
-    
+
     // preferCoin -> currency
     // mensualIngres -> monthly_income
     // birthDay -> birth_date
-    
+
     const q = `INSERT INTO users (email, password_hash, name, phone, country, address, currency, monthly_income, birth_date) 
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
                RETURNING id, email, name, role, created_at, phone, country, address, currency, monthly_income, birth_date, avatar_url`;
-               
+
     const { rows } = await query(q, [
-      email, 
-      hash, 
+      email,
+      hash,
       name || null,
       phone || null,
       country || null,
       address || null,
-      preferCoin || 'USD',
+      preferCoin || "USD",
       mensualIngres || null,
-      birthDay || null
+      birthDay || null,
     ]);
 
     const user = rows[0];
-    console.log('[REGISTER] User created with ID:', user.id);
+    console.log("[REGISTER] User created with ID:", user.id);
 
-    const token = jwt.sign({ id: user.id, email: user.email, role: 'user' }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
-    const refreshToken = jwt.sign({ id: user.id }, REFRESH_SECRET, { expiresIn: REFRESH_EXPIRES });
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: "user" },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+    const refreshToken = jwt.sign({ id: user.id }, REFRESH_SECRET, {
+      expiresIn: REFRESH_EXPIRES,
+    });
 
     const expiresAt = new Date(Date.now() + msToMs(REFRESH_EXPIRES));
-    await query('INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1,$2,$3)', [user.id, refreshToken, expiresAt]);
+    await query(
+      "INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1,$2,$3)",
+      [user.id, refreshToken, expiresAt]
+    );
 
-    console.log('[REGISTER] Registration successful for user:', user.id);
+    console.log("[REGISTER] Registration successful for user:", user.id);
     res.json({ user, token, refreshToken });
   } catch (err) {
-    if (err.code === '23505') return res.status(400).json({ error: 'Email already registered' });
-    console.error('[REGISTER ERROR]', err);
-    console.error('[REGISTER ERROR] Message:', err.message);
-    console.error('[REGISTER ERROR] Stack:', err.stack);
-    res.status(500).json({ error: 'Server error' });
+    if (err.code === "23505")
+      return res.status(400).json({ error: "Email already registered" });
+    console.error("[REGISTER ERROR]", err);
+    console.error("[REGISTER ERROR] Message:", err.message);
+    console.error("[REGISTER ERROR] Stack:", err.stack);
+    res.status(500).json({ error: "Server error" });
   }
 }
 
 export async function login(req, res) {
   const { email, password } = req.body;
   try {
-    console.log('[LOGIN] Starting login for email:', email);
-    
+    console.log("[LOGIN] Starting login for email:", email);
+
     // Include all profile fields in login query
-    const q = 'SELECT id, email, password_hash, name, role, avatar_url, phone, country, address, currency, monthly_income, birth_date, created_at FROM users WHERE email=$1';
+    const q =
+      "SELECT id, email, password_hash, name, role, avatar_url, phone, country, address, currency, monthly_income, birth_date, created_at FROM users WHERE email=$1";
     const { rows } = await query(q, [email]);
-    
-    if (!rows.length) return res.status(401).json({ error: 'Invalid credentials' });
+
+    if (!rows.length)
+      return res.status(401).json({ error: "Invalid credentials" });
 
     const user = rows[0];
     const match = await bcrypt.compare(password, user.password_hash);
-    console.log('[LOGIN] Password match:', match);
+    console.log("[LOGIN] Password match:", match);
 
-    if (!match) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!match) return res.status(401).json({ error: "Invalid credentials" });
 
-    const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
-    const refreshToken = jwt.sign({ id: user.id }, REFRESH_SECRET, { expiresIn: REFRESH_EXPIRES });
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+    const refreshToken = jwt.sign({ id: user.id }, REFRESH_SECRET, {
+      expiresIn: REFRESH_EXPIRES,
+    });
 
     const expiresAt = new Date(Date.now() + msToMs(REFRESH_EXPIRES));
-    await query('INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1,$2,$3)', [user.id, refreshToken, expiresAt]);
+    await query(
+      "INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1,$2,$3)",
+      [user.id, refreshToken, expiresAt]
+    );
 
-    console.log('[LOGIN] Login successful for user:', user.id);
+    console.log("[LOGIN] Login successful for user:", user.id);
     // Remove password_hash before sending
     const { password_hash, ...userWithoutPass } = user;
-    
+
     res.json({ user: userWithoutPass, token, refreshToken });
   } catch (err) {
-    console.error('[LOGIN ERROR]', err);
-    console.error('[LOGIN ERROR] Message:', err.message);
-    console.error('[LOGIN ERROR] Stack:', err.stack);
-    res.status(500).json({ error: 'Server error' });
+    console.error("!!! LOGIN FAILURE DETAILED !!!", err.message);
+    if (err.detail) console.error("!!! LOGIN FAILURE DETAIL !!!", err.detail);
+    if (err.hint) console.error("!!! LOGIN FAILURE HINT !!!", err.hint);
+    console.error("[LOGIN ERROR]", err);
+    res.status(500).json({ error: "Server error: " + err.message });
   }
 }
 
 export async function getProfile(req, res) {
   try {
-    const q = 'SELECT id, email, name, role, avatar_url, phone, country, address, currency, monthly_income, birth_date, created_at FROM users WHERE id = $1';
+    const q =
+      "SELECT id, email, name, role, avatar_url, phone, country, address, currency, monthly_income, birth_date, created_at FROM users WHERE id = $1";
     const { rows } = await query(q, [req.user.id]);
-    
+
     if (!rows.length) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: "User not found" });
     }
-    
+
     res.json(rows[0]);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: "Server error" });
   }
 }
 
@@ -122,61 +155,79 @@ export async function changePassword(req, res) {
 
   try {
     // 1. Obtener el usuario con su hash de contraseña actual
-    const { rows } = await query('SELECT password_hash FROM users WHERE id = $1', [userId]);
-    if (!rows.length) return res.status(404).json({ error: 'User not found' });
-    
+    const { rows } = await query(
+      "SELECT password_hash FROM users WHERE id = $1",
+      [userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: "User not found" });
+
     const user = rows[0];
 
     // 2. Verificar que la contraseña actual sea correcta
     const match = await bcrypt.compare(currentPassword, user.password_hash);
-    if (!match) return res.status(400).json({ error: 'La contraseña actual es incorrecta' });
+    if (!match)
+      return res
+        .status(400)
+        .json({ error: "La contraseña actual es incorrecta" });
 
     // 3. Hashear la nueva contraseña
     const saltRounds = 10;
     const newHash = await bcrypt.hash(newPassword, saltRounds);
 
     // 4. Actualizar en la base de datos
-    await query('UPDATE users SET password_hash = $1 WHERE id = $2', [newHash, userId]);
+    await query("UPDATE users SET password_hash = $1 WHERE id = $2", [
+      newHash,
+      userId,
+    ]);
 
-    console.log('[AUTH] Password changed for user:', userId);
-    res.json({ message: 'Contraseña actualizada correctamente' });
+    console.log("[AUTH] Password changed for user:", userId);
+    res.json({ message: "Contraseña actualizada correctamente" });
   } catch (err) {
-    console.error('[CHANGE PASSWORD ERROR]', err);
-    res.status(500).json({ error: 'Server error' });
+    console.error("[CHANGE PASSWORD ERROR]", err);
+    res.status(500).json({ error: "Server error" });
   }
 }
 
 export async function refreshToken(req, res) {
   const { refreshToken } = req.body;
-  if (!refreshToken) return res.status(400).json({ error: 'No refresh token' });
+  if (!refreshToken) return res.status(400).json({ error: "No refresh token" });
   try {
     const payload = jwt.verify(refreshToken, REFRESH_SECRET);
-    const { rows } = await query('SELECT * FROM refresh_tokens WHERE token=$1', [refreshToken]);
-    if (!rows.length) return res.status(401).json({ error: 'Invalid refresh token' });
+    const { rows } = await query(
+      "SELECT * FROM refresh_tokens WHERE token=$1",
+      [refreshToken]
+    );
+    if (!rows.length)
+      return res.status(401).json({ error: "Invalid refresh token" });
 
     const { id: userId } = payload;
-    const q = 'SELECT id,email,role,name FROM users WHERE id=$1';
+    const q = "SELECT id,email,role,name FROM users WHERE id=$1";
     const userRes = await query(q, [userId]);
     const user = userRes.rows[0];
-    if (!user) return res.status(401).json({ error: 'User not found' });
+    if (!user) return res.status(401).json({ error: "User not found" });
 
-    const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
     res.json({ token });
   } catch (err) {
     console.error(err);
-    res.status(401).json({ error: 'Invalid token' });
+    res.status(401).json({ error: "Invalid token" });
   }
 }
 
 export async function logout(req, res) {
   const { refreshToken } = req.body;
-  if (!refreshToken) return res.status(400).json({ error: 'Missing refresh token' });
+  if (!refreshToken)
+    return res.status(400).json({ error: "Missing refresh token" });
   try {
-    await query('DELETE FROM refresh_tokens WHERE token=$1', [refreshToken]);
+    await query("DELETE FROM refresh_tokens WHERE token=$1", [refreshToken]);
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: "Server error" });
   }
 }
 
@@ -186,9 +237,9 @@ function msToMs(str) {
   if (!match) return 0;
   const value = Number(match[1]);
   const unit = match[2];
-  if (unit === 'd') return value * 24 * 60 * 60 * 1000;
-  if (unit === 'h') return value * 60 * 60 * 1000;
-  if (unit === 'm') return value * 60 * 1000;
+  if (unit === "d") return value * 24 * 60 * 60 * 1000;
+  if (unit === "h") return value * 60 * 60 * 1000;
+  if (unit === "m") return value * 60 * 1000;
   return 0;
 }
 
@@ -197,50 +248,51 @@ export async function forgotPassword(req, res) {
 
   try {
     // Buscar el usuario por email
-    const { rows } = await query('SELECT id, email, name FROM users WHERE email = $1', [email]);
+    const { rows } = await query(
+      "SELECT id, email, name FROM users WHERE email = $1",
+      [email]
+    );
 
     // Por seguridad, siempre retornar el mismo mensaje (no revelar si el email existe)
     if (!rows.length) {
       return res.status(200).json({
-        message: 'Si el email existe, recibirás un correo de recuperación'
+        message: "Si el email existe, recibirás un correo de recuperación",
       });
     }
 
     const user = rows[0];
 
     // Generar token de recuperación
-    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetToken = crypto.randomBytes(32).toString("hex");
     const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hora
 
     // Guardar token en la base de datos
     await query(
-      'INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES ($1, $2, $3) ON CONFLICT (user_id) DO UPDATE SET token = $2, expires_at = $3, created_at = NOW()',
+      "INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES ($1, $2, $3) ON CONFLICT (user_id) DO UPDATE SET token = $2, expires_at = $3, created_at = NOW()",
       [user.id, resetToken, resetTokenExpiry]
     );
 
-    // Configurar MailerSend
-    const mailerSend = new MailerSend({
-      apiKey: process.env.MAILERSEND_API_KEY,
+    // Configurar Nodemailer (Gmail)
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS, // Contraseña de aplicación
+      },
     });
 
-    const sentFrom = new Sender(
-      process.env.MAILERSEND_SENDER_EMAIL,
-      process.env.MAILERSEND_SENDER_NAME || 'FinanceFlow'
-    );
+    const resetUrl = `${(
+      process.env.FRONTEND_URL || "http://localhost:5173"
+    ).replace(/\/$/, "")}/reset-password/${resetToken}`;
 
-    const recipients = [new Recipient(email, user.name || 'Usuario')];
-
-    const baseUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
-    const resetUrl = `${baseUrl}/reset-password/${resetToken}`;
-
-    const emailParams = new EmailParams()
-      .setFrom(sentFrom)
-      .setTo(recipients)
-      .setSubject('Recuperar Contraseña - FinanceFlow')
-      .setHtml(`
+    const mailOptions = {
+      from: `"FinanceFlow" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: "Recuperar Contraseña - FinanceFlow",
+      html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <h2 style="color: #10b981;">Recuperación de Contraseña</h2>
-          <p>Hola ${user.name || 'Usuario'},</p>
+          <p>Hola ${user.name || "Usuario"},</p>
           <p>Recibimos una solicitud para restablecer tu contraseña.</p>
           <p>Haz clic en el siguiente botón para restablecer tu contraseña:</p>
           <div style="text-align: center; margin: 30px 0;">
@@ -259,34 +311,21 @@ export async function forgotPassword(req, res) {
           <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
           <p style="color: #999; font-size: 12px;">
             Este enlace expirará en 1 hora.<br>
-            Si no solicitaste este cambio, ignora este correo y tu contraseña permanecerá sin cambios.
+            Si no solicitaste este cambio, ignora este correo.
           </p>
         </div>
-      `)
-      .setText(`
-        Recuperación de Contraseña
+      `,
+    };
 
-        Hola ${user.name || 'Usuario'},
-
-        Recibimos una solicitud para restablecer tu contraseña.
-
-        Visita este enlace para restablecer tu contraseña:
-        ${resetUrl}
-
-        Este enlace expirará en 1 hora.
-        Si no solicitaste este cambio, ignora este correo.
-      `);
-
-    await mailerSend.email.send(emailParams);
+    await transporter.sendMail(mailOptions);
 
     res.status(200).json({
-      message: 'Si el email existe, recibirás un correo de recuperación'
+      message: "Si el email existe, recibirás un correo de recuperación",
     });
-
   } catch (error) {
-    console.error('Error en forgot-password:', error);
+    console.error("Error en forgot-password:", error);
     res.status(500).json({
-      error: 'Error al procesar la solicitud'
+      error: "Error al procesar la solicitud",
     });
   }
 }
@@ -297,20 +336,22 @@ export async function resetPassword(req, res) {
   try {
     // Buscar el token
     const { rows } = await query(
-      'SELECT user_id, expires_at FROM password_reset_tokens WHERE token = $1',
+      "SELECT user_id, expires_at FROM password_reset_tokens WHERE token = $1",
       [token]
     );
 
     if (!rows.length) {
-      return res.status(400).json({ error: 'Token inválido o expirado' });
+      return res.status(400).json({ error: "Token inválido o expirado" });
     }
 
     const resetData = rows[0];
 
     // Verificar si el token ha expirado
     if (new Date() > new Date(resetData.expires_at)) {
-      await query('DELETE FROM password_reset_tokens WHERE token = $1', [token]);
-      return res.status(400).json({ error: 'Token expirado' });
+      await query("DELETE FROM password_reset_tokens WHERE token = $1", [
+        token,
+      ]);
+      return res.status(400).json({ error: "Token expirado" });
     }
 
     // Hash de la nueva contraseña
@@ -318,26 +359,26 @@ export async function resetPassword(req, res) {
     const hash = await bcrypt.hash(newPassword, saltRounds);
 
     // Actualizar la contraseña del usuario
-    await query(
-      'UPDATE users SET password_hash = $1 WHERE id = $2',
-      [hash, resetData.user_id]
-    );
+    await query("UPDATE users SET password_hash = $1 WHERE id = $2", [
+      hash,
+      resetData.user_id,
+    ]);
 
     // Eliminar el token usado
-    await query('DELETE FROM password_reset_tokens WHERE token = $1', [token]);
+    await query("DELETE FROM password_reset_tokens WHERE token = $1", [token]);
 
     // Opcional: Invalidar todos los refresh tokens del usuario
-    await query('DELETE FROM refresh_tokens WHERE user_id = $1', [resetData.user_id]);
+    await query("DELETE FROM refresh_tokens WHERE user_id = $1", [
+      resetData.user_id,
+    ]);
 
     res.status(200).json({
-      message: 'Contraseña actualizada exitosamente'
+      message: "Contraseña actualizada exitosamente",
     });
-
   } catch (error) {
-    console.error('Error en reset-password:', error);
+    console.error("Error en reset-password:", error);
     res.status(500).json({
-      error: 'Error al restablecer la contraseña'
+      error: "Error al restablecer la contraseña",
     });
   }
 }
-

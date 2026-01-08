@@ -17,6 +17,7 @@ import reportRoutes from './routes/reports.js';
 import accountRoutes from './routes/accounts.js';
 import goalRoutes from './routes/goals.js';
 import recurringRoutes from './routes/recurring.js';
+import investmentRoutes from './routes/investments.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -52,8 +53,10 @@ app.use('/api/budgets', budgetRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/accounts', accountRoutes);
+app.use('/api/wallets', accountRoutes); // Alias wallets to accounts
 app.use('/api/goals', goalRoutes);
 app.use('/api/recurring', recurringRoutes);
+app.use('/api/investments', investmentRoutes);
 
 // health
 app.get('/health', (_, res) => res.json({ ok: true, env: process.env.NODE_ENV || 'dev' }));

@@ -1,16 +1,33 @@
 import { query } from '../db.js';
 
+// Helper to map DB snake_case to API camelCase
+function mapToCamelCase(row) {
+  if (!row) return null;
+  return {
+    ...row,
+    targetAmount: parseFloat(row.target_amount),
+    currentAmount: parseFloat(row.current_amount),
+    userId: row.user_id,
+    createdAt: row.created_at,
+    // Keep original for back-compat if needed, or cleanup
+  };
+}
+
 // Crear meta de ahorro
 export async function createGoal(req, res) {
   const userId = req.user.id;
-  const { name, target_amount, current_amount = 0, deadline, description, icon, color } = req.body;
+  // Support both camelCase and snake_case
+  const { name, targetAmount, target_amount, currentAmount, current_amount = 0, deadline, description, icon, color } = req.body;
+  
+  const target = targetAmount || target_amount;
+  const current = currentAmount || current_amount || 0;
 
   try {
     const q = `INSERT INTO savings_goals (user_id, name, target_amount, current_amount, deadline, description, icon, color)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`;
-    const { rows } = await query(q, [userId, name, target_amount, current_amount, deadline || null, description || null, icon || null, color || null]);
+    const { rows } = await query(q, [userId, name, target, current, deadline || null, description || null, icon || null, color || null]);
 
-    res.status(201).json({ goal: rows[0] });
+    res.status(201).json({ goal: mapToCamelCase(rows[0]) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
@@ -45,7 +62,7 @@ export async function getGoals(req, res) {
 
     const { rows } = await query(q, [userId]);
 
-    res.json({ goals: rows });
+    res.json(rows.map(mapToCamelCase));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
@@ -68,7 +85,7 @@ export async function getGoalById(req, res) {
 
     if (!rows.length) return res.status(404).json({ error: 'Goal not found' });
 
-    res.json({ goal: rows[0] });
+    res.json({ goal: mapToCamelCase(rows[0]) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
@@ -86,9 +103,22 @@ export async function updateGoal(req, res) {
     const vals = [];
     let idx = 1;
 
-    for (const key of ['name', 'target_amount', 'current_amount', 'deadline', 'description', 'icon', 'color']) {
-      if (fields[key] !== undefined) {
-        setParts.push(`${key}=$${idx++}`);
+    // Map camelCase keys to snake_case columns
+    const keyMap = {
+      name: 'name',
+      targetAmount: 'target_amount',
+      target_amount: 'target_amount',
+      currentAmount: 'current_amount',
+      current_amount: 'current_amount',
+      deadline: 'deadline',
+      description: 'description',
+      icon: 'icon',
+      color: 'color'
+    };
+
+    for (const key of Object.keys(fields)) {
+      if (keyMap[key] && fields[key] !== undefined) {
+        setParts.push(`${keyMap[key]}=$${idx++}`);
         vals.push(fields[key]);
       }
     }
@@ -108,7 +138,7 @@ export async function updateGoal(req, res) {
       global.io.to(`user_${userId}`).emit('goal_completed', rows[0]);
     }
 
-    res.json({ goal: rows[0] });
+    res.json({ goal: mapToCamelCase(rows[0]) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
@@ -135,7 +165,7 @@ export async function contributeToGoal(req, res) {
       global.io.to(`user_${userId}`).emit('goal_completed', rows[0]);
     }
 
-    res.json({ goal: rows[0] });
+    res.json({ goal: mapToCamelCase(rows[0]) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
