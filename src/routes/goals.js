@@ -11,7 +11,7 @@ router.use(authenticateJWT);
 // Create goal
 router.post('/',
   body('name').isString().notEmpty(),
-  body('target_amount').isNumeric(),
+  body('targetAmount').isNumeric(),
   async (req, res) => {
     const errs = validationResult(req);
     if (!errs.isEmpty()) return res.status(400).json({ errors: errs.array() });

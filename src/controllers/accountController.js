@@ -3,12 +3,14 @@ import { query } from '../db.js';
 // Crear cuenta/billetera
 export async function createAccount(req, res) {
   const userId = req.user.id;
-  const { name, type = 'cash', currency = 'EUR', initial_balance = 0, color = null, icon = null } = req.body;
+  const { name, type = 'cash', currency = 'EUR', balance, initial_balance, color = null, icon = null } = req.body;
+  
+  const initialBalance = balance || initial_balance || 0;
 
   try {
     const q = `INSERT INTO accounts (user_id, name, type, currency, balance, color, icon)
                VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`;
-    const { rows } = await query(q, [userId, name, type, currency, initial_balance, color, icon]);
+    const { rows } = await query(q, [userId, name, type, currency, initialBalance, color, icon]);
 
     res.status(201).json({ account: rows[0] });
   } catch (err) {

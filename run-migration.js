@@ -1,3 +1,5 @@
+import dotenv from 'dotenv';
+dotenv.config();
 import { pool } from './src/db.js';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -8,20 +10,19 @@ const __dirname = dirname(__filename);
 
 async function runMigration() {
   try {
-    console.log('🔄 Ejecutando migración de password_reset_tokens...\n');
+    console.log('🔄 Ejecutando migración de investments...\n');
 
     const migrationSQL = fs.readFileSync(
-      join(__dirname, 'migration_password_reset.sql'),
+      join(__dirname, 'migration_investments.sql'),
       'utf8'
     );
 
     await pool.query(migrationSQL);
 
     console.log('✅ Migración completada exitosamente!\n');
-    console.log('📋 Tabla creada: password_reset_tokens');
+    console.log('📋 Tabla creada: investments');
     console.log('📋 Índices creados:');
-    console.log('   - idx_password_reset_token');
-    console.log('   - idx_password_reset_user\n');
+    console.log('   - idx_investments_user\n');
 
     process.exit(0);
   } catch (error) {
