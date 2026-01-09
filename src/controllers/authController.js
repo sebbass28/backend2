@@ -32,14 +32,15 @@ async function createSession(userId, refreshToken, req) {
     const ip =
       req.headers["x-forwarded-for"] || req.socket.remoteAddress || req.ip;
 
-    await query(
+    const { rows } = await query(
       `INSERT INTO sessions (user_id, refresh_token, ip_address, user_agent, device_info)
-       VALUES ($1, $2, $3, $4, $5)`,
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
       [userId, refreshToken, ip, userAgentString, JSON.stringify(deviceInfo)]
     );
+    return rows[0].id;
   } catch (err) {
     console.error("Error creating session:", err);
-    // Don't block login if session logging fails, but it shouldn't fail.
+    return null;
   }
 }
 
@@ -164,10 +165,10 @@ export async function login(req, res) {
     );
 
     // Create Real Device Session
-    await createSession(user.id, refreshToken, req);
+    const sessionId = await createSession(user.id, refreshToken, req);
 
     const { password_hash, two_factor_secret, ...userWithoutPass } = user;
-    res.json({ user: userWithoutPass, token, refreshToken });
+    res.json({ user: userWithoutPass, token, refreshToken, sessionId });
   } catch (err) {
     console.error("[LOGIN ERROR]", err);
     res.status(500).json({ error: "Server error" });
@@ -228,10 +229,10 @@ export async function verifyLogin2FA(req, res) {
       [user.id, refreshToken, expiresAt]
     );
 
-    await createSession(user.id, refreshToken, req);
+    const sessionId = await createSession(user.id, refreshToken, req);
 
     const { password_hash, two_factor_secret, ...userWithoutPass } = user;
-    res.json({ user: userWithoutPass, token, refreshToken });
+    res.json({ user: userWithoutPass, token, refreshToken, sessionId });
   } catch (err) {
     console.error("[2FA LOGIN ERROR]", err);
     res.status(500).json({ error: "Server error" });
