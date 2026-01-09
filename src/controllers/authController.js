@@ -146,19 +146,17 @@ export async function login(req, res) {
       });
     }
 
-    // Normal Login Flow
-    const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN }
-    );
+    // Normal Login Flow (Prepare data, session created later)
+    // We need session ID BEFORE signing token now?
+    // CIRCULAR DEPENDENCY: Token needs SessionID, Session needs Token (refresh).
+    // Access Token needs SessionID. Refresh Token creates Session.
+
     const refreshToken = jwt.sign({ id: user.id }, REFRESH_SECRET, {
       expiresIn: REFRESH_EXPIRES,
     });
 
     const expiresAt = new Date(Date.now() + msToMs(REFRESH_EXPIRES));
 
-    // Store in legacy refresher
     await query(
       "INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1,$2,$3)",
       [user.id, refreshToken, expiresAt]
@@ -166,6 +164,16 @@ export async function login(req, res) {
 
     // Create Real Device Session
     const sessionId = await createSession(user.id, refreshToken, req);
+
+    if (!sessionId)
+      return res.status(500).json({ error: "Failed to create session" });
+
+    // Now sign Access Token WITH sessionId
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role, sessionId },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
 
     const { password_hash, two_factor_secret, ...userWithoutPass } = user;
     res.json({ user: userWithoutPass, token, refreshToken, sessionId });
@@ -213,11 +221,6 @@ export async function verifyLogin2FA(req, res) {
     }
 
     // Success - generate real tokens
-    const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN }
-    );
     const refreshToken = jwt.sign({ id: user.id }, REFRESH_SECRET, {
       expiresIn: REFRESH_EXPIRES,
     });
@@ -230,6 +233,12 @@ export async function verifyLogin2FA(req, res) {
     );
 
     const sessionId = await createSession(user.id, refreshToken, req);
+
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role, sessionId },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
 
     const { password_hash, two_factor_secret, ...userWithoutPass } = user;
     res.json({ user: userWithoutPass, token, refreshToken, sessionId });
@@ -433,10 +442,18 @@ export async function refreshToken(req, res) {
       payload.id,
     ]);
     const user = userRes.rows[0];
+
     if (!user) return res.status(401).json({ error: "User not found" });
 
+    // Find session to embed in new token
+    let sessionId = undefined;
+    const sRes = await query("SELECT id FROM sessions WHERE refresh_token=$1", [
+      refreshToken,
+    ]);
+    if (sRes.rows.length > 0) sessionId = sRes.rows[0].id;
+
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      { id: user.id, email: user.email, role: user.role, sessionId },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN }
     );
