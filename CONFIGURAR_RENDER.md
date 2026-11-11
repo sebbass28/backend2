@@ -23,7 +23,7 @@ postgresql://postgres.dtajmblqdjcnfuxkukzi:53V45t14n*28*@aws-1-eu-north-1.pooler
 
 ### JWT_SECRET
 ```
-***REMOVED***
+<genera uno con: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))">
 ```
 
 ### JWT_EXPIRES_IN
@@ -33,7 +33,7 @@ postgresql://postgres.dtajmblqdjcnfuxkukzi:53V45t14n*28*@aws-1-eu-north-1.pooler
 
 ### REFRESH_TOKEN_SECRET
 ```
-***REMOVED***
+<genera otro distinto con el mismo comando>
 ```
 
 ### REFRESH_TOKEN_EXPIRES_IN

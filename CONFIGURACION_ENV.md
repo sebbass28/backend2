@@ -25,11 +25,14 @@ Ve a tu dashboard de Vercel:
    https://tu-proyecto.vercel.app
    ```
 
-### 3. Secretos JWT (Ya generados ✅)
+### 3. Secretos JWT
 
-Ya generé estos secretos seguros para ti:
-- JWT_SECRET: `***REMOVED***`
-- REFRESH_TOKEN_SECRET: `***REMOVED***`
+Genera dos secretos distintos (no los subas nunca al repo) y ponlos solo en las variables de entorno de Render:
+```bash
+node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+```
+- JWT_SECRET: `<secreto_1>`
+- REFRESH_TOKEN_SECRET: `<secreto_2>`
 
 ---
 
